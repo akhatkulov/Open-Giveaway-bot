@@ -23,6 +23,7 @@ from helper_utils.is_time import is_time_check
 from helper_utils.prepare_report import prepare_report
 from data.config import BOT_USERNAME
 from helper_utils.join_checker_part import join
+from helper_utils.channels import get_channel_info
 
 router = Router()
 
@@ -51,14 +52,14 @@ async def check_join_cb_answer(call: types.CallbackQuery, state: FSMContext):
                     if get_info_gw(id=int(user_cache),x_type="status")=="open":
                         await bot.send_message(
                             chat_id=call.message.chat.id,
-                            text=f"Сиз #{user_cache} гивевейда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(user_cache), x_type='period')}. Ютсангиз хабар берамиз!",
+                            text=f"Сиз #{user_cache} Конкурсда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(user_cache), x_type='period')}. Ютсангиз хабар берамиз!",
                         )
                         change_info(cid=call.message.chat.id, type_data="add_gws", value=user_cache)
                         change_info_gw(
                             id=int(user_cache), x_type="add_user", value=call.message.chat.id
                         )
                     else:
-                        await bot.send_message(chat_id=call.message.chat.id,text=f"#{user_cache} Гивеаwай яукланди, {get_info_gw(id=int(user_cache),x_type='winner')} ютди!")
+                        await bot.send_message(chat_id=call.message.chat.id,text=f"#{user_cache} Конкурс яукланди, {get_info_gw(id=int(user_cache),x_type='winner')} ютди!")
                     change_info(cid=call.message.chat.id, type_data="cache", value="none")
                 else:
                     await bot.send_message(
@@ -84,7 +85,7 @@ async def send_ad_to_users(message: types.Message, state: FSMContext):
         if user_cache != "none":
             await bot.send_message(
                 chat_id=message.chat.id,
-                text=f"Сиз #{user_cache} гивевейда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(user_cache), x_type='period')}. Ютсангиз хабар берамиз!",
+                text=f"Сиз #{user_cache} Конкурсда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(user_cache), x_type='period')}. Ютсангиз хабар берамиз!",
             )
             change_info(cid=message.chat.id, type_data="add_gws", value=user_cache)
             change_info_gw(id=int(user_cache), x_type="add_user", value=message.chat.id)
@@ -100,10 +101,7 @@ async def send_ad_to_users(message: types.Message, state: FSMContext):
 @router.callback_query(F.data == "mychannels")
 async def gwo_channels(call: types.CallbackQuery):
     channels = get_info(cid=call.message.chat.id, type_data="channels")
-    if len(channels) != 0:
-        channel_list = "\n".join(channels)
-    else:
-        channel_list = "[МАВЖУД ЭМАС]"
+    channel_list = await get_channel_info(channels)
     res = f"Сизнинг каналларингиз:\n {channel_list}"
     await bot.send_message(
         chat_id=call.message.chat.id, text=res, reply_markup=manage_channel
@@ -173,25 +171,90 @@ async def add_channel_gwo_state(msg: types.Message, state: FSMContext):
 async def add_giveaway(call: types.CallbackQuery, state: FSMContext):
     await bot.send_message(
         chat_id=call.message.chat.id,
-        text="Конкурс тугаш вақтини киритинг. Масалан: <code>11.05.2008.13:00</code> , жараённи бекор қилиш учун /start буйруғини беринг.",
+        text="Расмни юборинг 1 дона, агар расм керак эмас бўлса !!! ни юборинг",
         parse_mode="HTML"
     )
-    await state.set_state(PanelState.ask_giweaway_period)
+    await state.set_state(PanelState.waiting_for_photo)
+    await sleep(0.3)
+
+@router.message(PanelState.waiting_for_photo)
+async def add_giveaway(message: types.Message, state: FSMContext):
+    if message.photo:
+        photo_id = message.photo[-1].file_id
+        await state.update_data(photo=photo_id)
+    else:
+        await state.update_data(photo=None)
+    await bot.send_message(
+            chat_id=message.chat.id,
+            text="Конкурсда неча киши ютиши керак? Масалан: 1",
+            parse_mode="HTML"
+        )
+    await state.set_state(PanelState.ask_winner_cnt)
+    await sleep(0.3)
+
+@router.message(PanelState.ask_winner_cnt)
+async def ask_winner_cnt(msg: types.Message, state:FSMContext):
+    if msg.text.isdigit():
+        await state.update_data(winner_cnt=msg.text)
+        await bot.send_message(
+            chat_id=msg.chat.id,
+            text="Конкурс тугаш вақтини киритинг. Масалан: <code>11.05.2008.13:00</code> , жараённи бекор қилиш учун /start буйруғини беринг.",
+            parse_mode="HTML"
+        )
+        await state.set_state(PanelState.ask_giweaway_period)
+    else:
+        await bot.send_message(chat_id=msg.chat.id,text="Рақам юборинг! Жараённи бекор қилиш учун /start денг")
     await sleep(0.3)
 
 @router.message(PanelState.ask_giweaway_period)
 async def add_giveaway_state(msg: types.Message, state: FSMContext):
-    if is_time_check(time=msg.text):
-        x_id = create_giveaway(gwo=msg.chat.id, period=msg.text)
-        await bot.send_message(
-            chat_id=msg.chat.id,
-            text=f"Конкурс яратилди: https://t.me/{BOT_USERNAME}?start={x_id}",
-        )
+    data = await state.get_data()
+    photo_id = data.get("photo")
+    time_text = msg.text
+    winner_cnt = int(data.get("winner_cnt"))
+    x_id = create_giveaway(gwo=msg.chat.id, period=time_text,winner_cnt=winner_cnt)
+    caption = f"https://t.me/{BOT_USERNAME}?start={x_id}"
+    if photo_id:
+        if is_time_check(time=time_text):
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🔑 Kirish", url=f"https://t.me/{BOT_USERNAME}?start={x_id}")],
+                # [types.InlineKeyboardButton(text="🔄 Ulashish", switch_inline_query="")]
+            ])
+            sent_message = await bot.send_photo(
+                chat_id=msg.chat.id,
+                photo=photo_id,
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            message_id = sent_message.message_id
+            
+            updated_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🔑 Kirish", url=f"https://t.me/{BOT_USERNAME}?start={x_id}")],
+                [types.InlineKeyboardButton(text="🔄 Ulashish", url=f"https://t.me/share/url?url=https://t.me/{(await bot.get_me()).username}/{message_id}")]
+            ])
+
+            await bot.edit_message_reply_markup(msg.chat.id, message_id, reply_markup=updated_keyboard)
+            await state.clear()
+        else:
+            await bot.send_message(
+                chat_id=msg.chat.id,
+                text="❌ Хато!!! Қайтадан уриниб кўринг, жараённи бекор қилиш учун /start буйруғидан фойдаланинг!",
+            )
     else:
-        await bot.send_message(
-            chat_id=msg.chat.id,
-            text="❌ Хато!!! Қайтадан уриниб кўринг, жараённи бекор қилиш учун /start буйруғидан фойдаланинг!",
-        )
+        if is_time_check(time=time_text):
+            x_id = create_giveaway(gwo=msg.chat.id, period=time_text,winner_cnt=winner_cnt)
+            await bot.send_message(
+                chat_id=msg.chat.id,
+                text=f"Конкурс яратилди: https://t.me/{BOT_USERNAME}?start={x_id}",
+            )
+            await state.clear()
+        else:
+            await bot.send_message(
+                chat_id=msg.chat.id,
+                text="❌ Хато!!! Қайтадан уриниб кўринг, жараённи бекор қилиш учун /start буйруғидан фойдаланинг!",
+            )
+
     await sleep(0.3)
 
 @router.callback_query(F.data == "list_giveaway")

@@ -39,6 +39,7 @@ class Giveaway(Base):
     status = Column(String)
     winner = Column(String)
     users = Column(String)
+    winner_cnt = Column(Integer, default=1) 
 
 
 class Channels(Base):
@@ -264,12 +265,16 @@ def delete_channel(ch_id):
         return False
 
 
-def create_giveaway(gwo, period):
-    gw = Giveaway(gwo=gwo, period=period, status="open", winner="nobody", users="[]")
-    session.add(gw)
-    session.commit()
-    return gw.id
-
+def create_giveaway(gwo, period,winner_cnt):
+    try:
+        gw = Giveaway(gwo=gwo, period=period, status="open", winner="nobody", users="[]",winner_cnt=int(winner_cnt))
+        session.add(gw)
+        session.commit()
+        return gw.id
+    except SQLAlchemyError as e:
+        session.rollback()
+        print(f"Error: {e}")
+        return False
 
 def change_info_gw(id, x_type, value):
     try:

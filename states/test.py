@@ -16,3 +16,5 @@ class PanelState(StatesGroup):
     add_channel = State()
     delete_channel = State()
     ask_giweaway_period = State()
+    waiting_for_photo = State()
+    ask_winner_cnt = State()

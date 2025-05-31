@@ -45,14 +45,14 @@ async def do_start(message: types.Message, state: FSMContext):
                 if get_info_gw(id=int(giveaway_id),x_type="status")=="open":
                     await bot.send_message(
                         chat_id=message.chat.id,
-                        text=f"Сиз #{giveaway_id} гивевейда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(giveaway_id), x_type='period')}. Ютсангиз хабар берамиз!",
+                        text=f"Сиз #{giveaway_id} Конкурсда қатнашмоқдасиз! Тугаш вақти: {get_info_gw(id=int(giveaway_id), x_type='period')}. Ютсангиз хабар берамиз!",
                     )
                     change_info(cid=message.chat.id, type_data="add_gws", value=giveaway_id)
                     change_info_gw(
                         id=int(giveaway_id), x_type="add_user", value=message.chat.id
                     )
                 else:
-                    await bot.send_message(chat_id=message.chat.id,text=f"#{giveaway_id} Гивеаwай яукланди, {get_info_gw(id=int(giveaway_id),x_type='winner')} ютди!")
+                    await bot.send_message(chat_id=message.chat.id,text=f"#{giveaway_id} Конкурс яукланди, {get_info_gw(id=int(giveaway_id),x_type='winner')} ютди!")
  
                 change_info(cid=message.chat.id, type_data="cache", value="none")
     else:
